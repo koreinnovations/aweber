@@ -1,0 +1,461 @@
+<?php
+/* $Id$ */
+
+/**
+* @file
+* Eases management of AWeber email list subscribers and Drupal users.
+*/
+
+define("AWEBER_SUBMITTED", 1); 
+define("AWEBER_SUBSCRIBED", 2);
+define("AWEBER_UNSUBSCRIBED", 0);
+define("AWEBER_CHANGED", 3);
+define("AWEBER_DELETED", 4);
+
+/**
+* Implementation of hook_menu()
+*/
+function aweber_menu($may_cache) {
+  $items = array();
+
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'aweberty',
+      'title' => t('Thank You'),
+      'callback' => 'aweber_thank_you_page',
+      'access' => TRUE,
+      'type' => MENU_CALLBACK 
+    );
+
+    $items[] = array(
+      'path' => 'admin/user/aweber',
+      'title' => t('AWeber'),
+      'callback' => 'aweber_overview',
+      'access' => user_access('access administration pages'),
+      'type' => MENU_NORMAL_ITEM
+    );
+    $items[] = array(
+      'path' => 'admin/user/aweber/list',
+      'title' => t('Leads'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => -10
+    );
+    $items[] = array(
+      'path' => 'admin/user/aweber/settings',
+      'title' => t('Settings'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('aweber_configure'),
+      'access' => user_access('access administration pages'),
+      'type' => MENU_LOCAL_TASK
+    );
+    $items[] = array(
+      'path' => 'admin/user/aweber/delete',
+      'title' => t('Delete lead'),
+      'access' => user_access('access administration pages'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('aweber_lead_delete_form'),
+      'type' => MENU_CALLBACK
+    );
+  }
+
+  return $items;
+}
+
+/**
+* Configuration settings form
+*/
+function aweber_configure() {
+  $form = array();
+
+  $form['aweber_account'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('AWeber List'),
+    '#description' => t('Required settings for use of the module.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE
+  );
+  $form['aweber_account']['aweber_list'] = array(
+    '#type' => 'textfield',
+    '#title' => t('List'),
+    '#description' => t('The list name users will be subscribing to. AWeber calls this the "unit".'),
+    '#default_value' => variable_get('aweber_list', ''),
+    '#required' => TRUE
+  );
+  $form['aweber_account']['aweber_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Id'),
+    '#description' => t('The web form ID. AWeber calls this the "meta_web_form_id".'),
+    '#default_value' => variable_get('aweber_id', ''),
+    '#required' => TRUE
+  );
+
+  $form['aweber_user'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account Integration'),
+    '#description' => t('Allow users to sign-up during registration and control subscribing and unsubscribing through their account settings.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE
+  );
+  $form['aweber_user']['aweber_user_form'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Integrate on account form.'),
+    '#description' => t('Place sign-up option on registration and account edit pages.'),
+    '#default_value' => variable_get('aweber_user_form', 1)
+  );
+  $form['aweber_user']['aweber_option_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label'),
+    '#description' => t('The text to go alongside the sign-up checkbox.'),
+    '#default_value' => variable_get('aweber_option_text', 'Sign up for our newsletter.')
+  );
+
+  $form['aweber_thanks'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Thank You Page'),
+    '#description' => t('A Thank You page which records leads is provided if you use the built in block.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE
+  );
+  $form['aweber_thanks']['aweber_thanks_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message'),
+    '#description' => t('The text to display on the Thank You page.'),
+    '#default_value' => variable_get('aweber_thanks_message', 'Thank you for subscribing! You will receive a confirmation message in your email.')
+  );
+
+  return system_settings_form($form);
+}
+
+function aweber_lead_delete_form($aid) {
+  $form['aid'] = array(
+    '#type' => 'hidden',
+    '#value' => $aid
+  );
+
+  return confirm_form(
+    $form,
+    t('Really delete this lead?'),
+    'admin/user/aweber',
+    t('This cannot be undone. Note that this does not delete the user account.'),
+    t('Delete'),
+    t('Cancel')
+  );
+}
+
+function aweber_lead_delete_form_submit($form_id, $form_values) {
+  $aid = $form_values['aid'];
+  $lead = aweber_lead_load($aid);
+  if ($lead-uid) {
+    $account = user_load(array('uid' => $lead->uid));
+    $account->aweber_signup = 0;
+    user_save($account, array('aweber_signup' => 0));
+  }
+
+  db_query("DELETE FROM {aweber} WHERE aid = %d", $aid);
+  drupal_set_message(t('Lead was deleted.'));
+  return 'admin/user/aweber';
+}
+
+function aweber_lead_load($aid) {
+  $result = db_query('SELECT * FROM {aweber} WHERE aid = %d', $aid);
+  return db_fetch_object($result);
+}
+
+/**
+* AWeber web form
+*/
+function aweber_web_form() {
+  global $base_url;
+  global $user;
+  $form = array();
+
+  $form['aweber']['meta_web_form_id'] = array(
+    '#type' => 'hidden',
+    '#value' => variable_get('aweber_id', '')
+  );
+  $form['aweber']['meta_split_id'] = array(
+    '#type' => 'hidden',
+    '#value' => ''
+  );
+  $form['aweber']['unit'] = array(
+    '#type' => 'hidden',
+    '#value' => variable_get('aweber_list', '')
+  );
+  $form['aweber']['redirect'] = array(
+    '#type' => 'hidden',
+    '#value' => $base_url .'/aweberty'
+  );
+  $form['aweber']['meta_redirect_onlist'] = array(
+    '#type' => 'hidden',
+    '#value' => ''
+  );
+  $form['aweber']['meta_adtracking'] = array(
+    '#type' => 'hidden',
+    '#value' => ''
+  );
+  $form['aweber']['meta_message'] = array(
+    '#type' => 'hidden',
+    '#value' => '1'
+  );
+  $form['aweber']['meta_required'] = array(
+    '#type' => 'hidden',
+    '#value' => 'from'
+  );
+  $form['aweber']['meta_forward_vars'] = array(
+    '#type' => 'hidden',
+    '#value' => '1'
+  );
+
+  $form['aweber']['from'] = array(
+    '#type' => 'textfield',
+    '#size' => '20',
+    '#default_value' => $user->uid ? $user->mail : '' 
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit',
+    '#name' => 'submit'
+  );
+
+  $form['#action'] = 'http://www.aweber.com/scripts/addlead.pl';
+
+  return $form;
+}
+
+/**
+* Implementation of hook_block()
+*/
+function aweber_block($op = 'list', $delta = 0, $edit = array()) {
+  global $user;
+
+  switch ($op) {
+    case 'list':
+      $blocks['aweber_form'] = array('info' => t('AWeber Sign-up Form'));
+      return $blocks;
+
+    case 'configure':
+      $form['aweber_block_text'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Description'),
+        '#description' => t('Text to display above the form.'),
+        '#default_value' => variable_get('aweber_block_text', '')
+      );
+      return $form;
+
+    case 'save':
+      variable_set('aweber_block_text', $edit['aweber_block_text']);
+      break;
+
+    case 'view':
+     if ($delta == 'aweber_form' && ($user->uid == 0 || $user->aweber_signup == 0)) {
+       $block['subject'] = t('Newsletter');
+       if (variable_get('aweber_block_text', '') != '') {
+         $block['content'] = theme('aweber_block_text', variable_get('aweber_block_text', ''));
+         $block['content'] .= drupal_get_form('aweber_web_form');
+       }
+       else {
+         $block['content'] = drupal_get_form('aweber_web_form');
+       }
+       return $block;
+     }
+  }
+}
+
+/**
+* Parse the return variables from AWeber
+*/
+function _aweber_parse_get() {
+  $data = array();
+
+  if (!empty($_GET['from']) && !empty($_GET['unit'])) {
+    $data['from'] = $_GET['from'];
+    $data['unit'] = urldecode($_GET['unit']);
+    $data['meta_web_form_id'] = urldecode($_GET['meta_web_form_id']);
+  }
+
+  return $data;
+}
+
+/**
+* Thank you page
+*/
+function aweber_thank_you_page() {
+  global $user;
+
+  if (variable_get('aweber_thanks_save', 1)) {
+    $data = _aweber_parse_get();
+
+    if (empty($data)) {
+      watchdog('aweber', t('Unable to parse and save variables returned by AWeber sign-up submit.'), WATCHDOG_ERROR);
+    }
+    else {
+      _aweber_save_lead($data);
+      $user->aweber_signup = 1; // keep our insert hook from resubmitting
+      user_save($user, array('aweber_signup' => 1));
+    }
+  }
+
+  return t(variable_get('aweber_thanks_message', 'Thank you for subscribing!'));
+}
+
+/**
+* Insert a lead
+*/
+function _aweber_save_lead($data, $uid = NULL) {
+  global $user;
+
+  if ($user->uid || $uid) {
+    $uid = $user->uid ? $user->uid : $uid;
+    db_query("INSERT INTO {aweber} (uid, mail, status, list, id, timestamp) VALUES (%d, '%s', %d, '%s', %d, %d)", $uid, $data['from'], AWEBER_SUBMITTED, $data['unit'], $data['meta_web_form_id'], time());
+  }
+  else {
+    db_query("INSERT INTO {aweber} (mail, status, list, id, timestamp) VALUES ('%s', %d, '%s', %d, %d)", $data['from'], AWEBER_SUBMITTED, $data['unit'], $data['meta_web_form_id'], time());
+  }
+  watchdog('aweber', t('New AWeber lead @mail', array('@mail' => $data['from'])), WATCHDOG_NOTICE); 
+}
+
+/**
+* Overview page of leads
+*/
+function aweber_overview() {
+  $output = '';
+
+  $header = array(
+    array('data' => t('Address'), 'field' => 'mail'),
+    array('data' => t('User')),
+    array('data' => t('Status'), 'field' => 'status'),
+    array('data' => t('Added'), 'field' => 'timestamp'),
+    array('data' => t('Operations'), 'colspan' => '2')
+  );
+
+  $sql = 'SELECT * FROM {aweber}';
+  $result = pager_query($sql . tablesort_sql($header), 50);
+  $rows = array();
+  while ($data = db_fetch_object($result)) {
+    $rows[] = array(
+      array('data' => check_plain($data->mail)),
+      array('data' => $data->uid ? theme('username', user_load(array('uid' => $data->uid))) : ''),
+      array('data' => aweber_format_status($data->status)),
+      array('data' => format_date($data->timestamp, 'custom', 'D, M Y g:ia')),
+      array('data' => t('edit')),
+      array('data' => l(t('delete'), 'admin/user/aweber/delete/'. $data->aid))
+    );
+  }
+
+  if ($rows) {
+    $pager = theme('pager', NULL, 50, 0);
+    $output .= '<h3>'. t('Leads') .'</h3>'; 
+    $output .= theme('table', $header, $rows);
+  }
+
+  return $output;
+}
+
+function aweber_format_status($status) {
+  $map = array(
+    AWEBER_SUBMITTED => t('Submitted'),
+    AWEBER_SUBSCRIBED => t('Subscribed'),
+    AWEBER_UNSUBSCRIBED => t('Unsubscribed'),
+    AWEBER_CHANGED => t('Changed'),
+    AWEBER_DELETED => t('Deleted')
+  );
+  return $map[$status];
+}
+
+/**
+* Implementation of hook_user()
+*/
+function aweber_user($op, &$edit, &$account, $category = NULL) {
+  switch ($op) {
+    case 'register':
+      if (variable_get('aweber_user_form', 0) && variable_get('aweber_id', '') != '') {
+        $form['aweber'] = array(
+          '#type' => 'fieldset',
+          '#title' => t('Newsletter'),
+          '#collapsible' => TRUE,
+          '#collapsed' => FALSE
+        );
+        $form['aweber']['aweber_signup'] = array(
+          '#type' => 'checkbox',
+          '#title' => t(variable_get('aweber_option_text', 'Sign up for our newsletter.')),
+          '#default_value' => 0,
+        );
+        return $form;
+      }
+      break;
+    case 'form':
+      if (variable_get('aweber_user_form', 0) && variable_get('aweber_id', '') != '' && $category == 'account') {
+        $form['aweber'] = array(
+          '#type' => 'fieldset',
+          '#title' => t('Newsletter'),
+          '#collapsible' => TRUE,
+          '#collapsed' => FALSE
+        );
+        $form['aweber']['aweber_signup'] = array(
+          '#type' => 'checkbox',
+          '#title' => t(variable_get('aweber_option_text', 'Sign up for our newsletter.')),
+          '#default_value' => !empty($account->aweber_signup) ? $account->aweber_signup : 0,
+        );
+        return $form;
+      }
+      break;
+    case 'update':
+      if (isset($edit['mail']) && $edit['mail'] != $account->mail && $account->aweber_signup == 1) {
+        aweber_update_mail($edit['mail'], $account->uid);
+      }
+      // purposefully fall through
+    case 'insert':
+      if (isset($edit['aweber_signup']) && $edit['aweber_signup'] == 1 && $account->aweber_signup == 0) {
+        aweber_form_post($account->mail, $account->uid);
+      }
+      else if (isset($edit['aweber_signup']) && $edit['aweber_signup'] == 0 && $account->aweber_signup == 1) {
+        aweber_update_lead_status(AWEBER_UNSUBSCRIBED, $account->uid);
+      }
+      break;
+    case 'delete':
+      if ($account->aweber_signup == 1) {
+        aweber_update_lead_status(AWEBER_UNSUBSCRIBED, $account->uid);
+      }
+      break;
+  }
+}
+
+function aweber_update_mail($mail, $uid) {
+  db_query("UPDATE {aweber} SET mail = '%s', status = %d WHERE uid = %d", $mail, AWEBER_CHANGED, $uid);
+}
+
+function aweber_update_lead_status($status, $uid) {
+  db_query('UPDATE {aweber} SET status = %d WHERE uid = %d', $status, $uid);
+}
+
+/**
+* Automatic signup post to AWeber
+*/
+function aweber_form_post($from, $uid) {
+  $data = array(
+    'from' => $from,
+    'meta_web_form_id' => variable_get('aweber_id', ''),
+    'meta_split_id' => '',
+    'unit' => variable_get('aweber_list', ''),
+    'redirect' => 'http://www.aweber.com/form/thankyou_vo.html',
+    'meta_redirect_onlist' => '',
+    'meta_adtracking' => '',
+    'meta_message' => '1',
+    'meta_required' => 'from',
+    'meta_forward_vars' => '0'
+  );
+
+  $url = 'http://www.aweber.com/scripts/addlead.pl';
+  // the magic! 
+  drupal_http_request($url, array('Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8'), 'POST', http_build_query($data, '', '&'));
+
+  _aweber_save_lead($data, $uid);
+}
+
+/**
+* Theme text shown above form block
+*/
+function theme_aweber_block_text($text) {
+  return t('<p>@text</p>', array('@text' => $text));
+}

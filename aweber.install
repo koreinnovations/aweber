@@ -2,7 +2,7 @@
 /* $Id$ */
 
 function aweber_install() {
-  switch($GLOBALS['db_type']) {
+  switch ($GLOBALS['db_type']) {
     case 'mysqli':
     case 'mysql':
       $query = db_query("

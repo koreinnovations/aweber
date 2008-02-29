@@ -33,4 +33,6 @@ Project maintainer: Ben Jeavons (Drupal.org username: coltrane) (jeavons AT gmai
 
 Development and maintenance sponsored by pingVision - http://pingv.com.
 
+AWeber.com and the AWeber service have their own license and Terms of Service.
+
 $Id$

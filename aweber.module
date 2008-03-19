@@ -109,6 +109,12 @@ function aweber_configure() {
     '#description' => t('Place sign-up option on registration and account edit pages.'),
     '#default_value' => variable_get('aweber_user_form', 1)
   );
+  $form['aweber_user']['aweber_registration_default'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Set checkbox on registration to checked.'),
+    '#description' => t('By default the registration checkbox is not checked. Check this box to sign leads up by default.'),
+    '#default_value' => variable_get('aweber_registration_default', 0)
+  );
   $form['aweber_user']['aweber_option_text'] = array(
     '#type' => 'textfield',
     '#title' => t('Label'),
@@ -397,7 +403,7 @@ function aweber_user($op, &$edit, &$account, $category = NULL) {
         $form['aweber']['aweber_signup'] = array(
           '#type' => 'checkbox',
           '#title' => t(variable_get('aweber_option_text', 'Sign up for our newsletter.')),
-          '#default_value' => 0,
+          '#default_value' => variable_get('aweber_registration_default', 0),
         );
         return $form;
       }

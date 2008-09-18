@@ -56,6 +56,14 @@ function aweber_menu($may_cache) {
       'type' => MENU_LOCAL_TASK
     );
     $items[] = array(
+      'path' => 'admin/user/aweber/edit',
+      'title' => t('Edit lead status'),
+      'access' => user_access('access administration pages'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('aweber_lead_edit_form'),
+      'type' => MENU_CALLBACK
+    );
+    $items[] = array(
       'path' => 'admin/user/aweber/delete',
       'title' => t('Delete lead'),
       'access' => user_access('access administration pages'),
@@ -90,7 +98,7 @@ function aweber_configure() {
   );
   $form['aweber_account']['aweber_id'] = array(
     '#type' => 'textfield',
-    '#title' => t('Id'),
+    '#title' => t('ID'),
     '#description' => t('The web form ID. AWeber calls this the "meta_web_form_id".'),
     '#default_value' => variable_get('aweber_id', ''),
     '#required' => TRUE
@@ -139,6 +147,34 @@ function aweber_configure() {
   return system_settings_form($form);
 }
 
+function aweber_lead_edit_form($aid) {
+  $lead = aweber_lead_load($aid);
+  $form['mail'] = array(
+    '#type' => 'markup',
+    '#value' => '<p>' . check_plain($lead->mail) . '</p>',
+  );
+  $form['lead'] = array(
+    '#type' => 'value',
+    '#value' => $lead,
+  );
+  $form['status'] = array(
+    '#type' => 'select',
+    '#title' => t('Status'),
+    '#options' => aweber_format_status(),
+    '#default_value' => $lead->status,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+  return $form;
+}
+
+function aweber_lead_edit_form_submit($form_id, $form_values) {
+  aweber_update_lead_status($form_values['status'], $form_values['lead']->uid);
+  return 'admin/user/aweber';
+}
+
 function aweber_lead_delete_form($aid) {
   $form['aid'] = array(
     '#type' => 'hidden',
@@ -158,8 +194,8 @@ function aweber_lead_delete_form($aid) {
 function aweber_lead_delete_form_submit($form_id, $form_values) {
   $aid = $form_values['aid'];
   $lead = aweber_lead_load($aid);
-  if ($lead->uid) {
-    $account = user_load(array('uid' => $lead->uid));
+  $account = user_load(array('uid' => $lead->uid));
+  if ($account->uid) {
     $account->aweber_signup = 0;
     user_save($account, array('aweber_signup' => 0));
   }
@@ -196,7 +232,7 @@ function aweber_web_form() {
   );
   $form['aweber']['redirect'] = array(
     '#type' => 'hidden',
-    '#value' => url('aweberty', NULL, NULL, TRUE)
+    '#value' => url('aweberreturnpage', NULL, NULL, TRUE)
   );
   $form['aweber']['meta_redirect_onlist'] = array(
     '#type' => 'hidden',
@@ -222,7 +258,7 @@ function aweber_web_form() {
   $form['aweber']['from'] = array(
     '#type' => 'textfield',
     '#size' => '20',
-    '#default_value' => $user->uid ? $user->mail : ''
+    '#default_value' => $user->uid ? check_plain($user->mail) : ''
   );
 
   $form['submit'] = array(
@@ -343,7 +379,10 @@ function _aweber_save_lead($data, $uid = NULL) {
 * Overview page of leads
 */
 function aweber_overview() {
-  $output = '';
+  $items[] = t('Submitted: User has begun the signup process. You should check if they followup on the AWeber confirmation by checking your list on aweber.com.');
+  $items[] = t('Subscribed: Mark a lead as subscribed once they have confirmed subscription on aweber.com');
+  $items[] = t('Changed: If a user alters their email address here on the site you should update their subscription on aweber.');
+  $output = theme('item_list', $items, t('Status Legend'));
 
   $header = array(
     array('data' => t('Address'), 'field' => 'mail'),
@@ -362,7 +401,7 @@ function aweber_overview() {
       array('data' => $data->uid ? theme('username', user_load(array('uid' => $data->uid))) : ''),
       array('data' => aweber_format_status($data->status)),
       array('data' => format_date($data->timestamp, 'custom', 'D, M Y g:ia')),
-      //array('data' => t('edit')), //TODO
+      array('data' => l(t('edit'), 'admin/user/aweber/edit/'. $data->aid)),
       array('data' => l(t('delete'), 'admin/user/aweber/delete/'. $data->aid))
     );
   }
@@ -372,11 +411,14 @@ function aweber_overview() {
     $output .= '<h3>'. t('Leads') .'</h3>'; 
     $output .= theme('table', $header, $rows);
   }
+  else {
+    $output .= t('There are no leads.'); 
+  }
 
   return $output;
 }
 
-function aweber_format_status($status) {
+function aweber_format_status($status = NULL) {
   $map = array(
     AWEBER_SUBMITTED => t('Submitted'),
     AWEBER_SUBSCRIBED => t('Subscribed'),
@@ -384,7 +426,7 @@ function aweber_format_status($status) {
     AWEBER_CHANGED => t('Changed'),
     AWEBER_DELETED => t('Deleted')
   );
-  return $map[$status];
+  return is_null($status) ? $map : $map[$status];
 }
 
 /**
@@ -439,7 +481,7 @@ function aweber_user($op, &$edit, &$account, $category = NULL) {
       break;
     case 'delete':
       if ($account->aweber_signup == 1) {
-        aweber_update_lead_status(AWEBER_UNSUBSCRIBED, $account->uid);
+        aweber_update_lead_status(AWEBER_DELETED, $account->uid);
       }
       break;
   }

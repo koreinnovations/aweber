@@ -11,6 +11,11 @@ Features
     * Customizable Thank You page
     * Customizable block mimics AWeber's web form
 
+** REQUIREMENTS **
+
+Drupal 5.x
+PHP 5 or greater
+
 ** INSTALLATION **
 
 Enable the module under Administer > Site building > Modules.
@@ -29,7 +34,7 @@ Please use the issue queue at http://drupal.org/project/issues/aweber.
 
 ** CREDITS **
 
-Project maintainer: Ben Jeavons (Drupal.org username: coltrane) (jeavons AT gmail DOT com) but please use the issue queue for support!
+Project maintainer: Ben Jeavons (Drupal.org username: coltrane) but please use the issue queue for support!
 
 Development and maintenance sponsored by pingVision - http://pingv.com.
 

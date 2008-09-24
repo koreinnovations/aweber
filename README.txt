@@ -13,7 +13,7 @@ Features
 
 ** REQUIREMENTS **
 
-Drupal 5.x
+Drupal 6.x
 PHP 5 or greater
 
 ** INSTALLATION **

@@ -1,3 +1,5 @@
 ; $Id$
 name = AWeber Integration
 description = Integrate and manage your site users as AWeber leads.
+core = 6.x
+php = 5

@@ -1,34 +1,72 @@
 <?php
 /* $Id$ */
 
+/**
+ * Implementation of hook_install().
+ */
 function aweber_install() {
-  switch ($GLOBALS['db_type']) {
-    case 'mysqli':
-    case 'mysql':
-      $query = db_query("
-CREATE TABLE {aweber} (
-  aid int unsigned NOT NULL auto_increment,
-  uid int(10) unsigned NOT NULL default 0,
-  mail varchar(64) NOT NULL default '',
-  status tinyint unsigned NOT NULL default 0,
-  list varchar(15) NOT NULL default '',
-  id bigint unsigned NOT NULL default 0,
-  timestamp int(11) NOT NULL default 0,
-  PRIMARY KEY (aid),
-  KEY timestamp (timestamp)
-) /*!40100 DEFAULT CHARACTER SET utf8 */;
-    ");
-
-    if ($query) {
-      drupal_set_message(t('AWeber table created successfully. To make use of the module you will need to <a href="@config-page">configure</a> it.', array('@config-page' => url('admin/user/aweber/settings'))));
-    }
-    else {
-      drupal_set_message(t('Failure: AWeber table was not created.'));
-    }
-    break;
-  }
+  drupal_install_schema('aweber');
 }
 
+/**
+ * Implementation of hook_uninstall().
+ */
 function aweber_uninstall() {
-  db_query('DROP TABLE {aweber}');
+  drupal_uninstall_schema('aweber');
+}
+
+/**
+ * Implementation of hook_schema().
+ */
+function aweber_schema() {
+  $schema['aweber'] = array(
+    'description' => t('Stores AWeber lead data.'),
+    'fields' => array(
+      'aid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'mail' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'list' => array(
+        'type' => 'varchar',
+        'length' => 15,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'id' => array(
+        'type' => 'int',
+        'size' => 'big',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('aid'),
+  );
+  return $schema;
 }

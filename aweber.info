@@ -3,3 +3,11 @@ name = AWeber Integration
 description = Integrate and manage your site users as AWeber leads.
 core = 6.x
 php = 5
+
+
+; Information added by drupal.org packaging script on 2009-10-21
+version = "6.x-1.0"
+core = "6.x"
+project = "aweber"
+datestamp = "1256151640"
+

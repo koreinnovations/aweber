@@ -28,6 +28,7 @@ function aweber_menu() {
   $items['admin/user/aweber'] = array(
     'title' => 'AWeber',
     'page callback' => 'aweber_overview',
+    'description' => 'Overview of AWeber leads and integration settings',
     'access arguments' => array('access administration pages'),
     'type' => MENU_NORMAL_ITEM
   );

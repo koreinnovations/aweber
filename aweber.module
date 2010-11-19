@@ -336,7 +336,7 @@ function aweber_return_page() {
     drupal_goto('aweberty');
   }
   else {
-    return t(variable_get('aweber_thanks_message', 'Thank you for subscribing!'));  
+    return filter_xss_admin(variable_get('aweber_thanks_message', t('Thank you for subscribing!')));
   }
 }
 
@@ -426,7 +426,7 @@ function aweber_user($op, &$edit, &$account, $category = NULL) {
         );
         $form['aweber']['aweber_signup'] = array(
           '#type' => 'checkbox',
-          '#title' => t(variable_get('aweber_option_text', 'Sign up for our newsletter.')),
+          '#title' => filter_xss_admin(variable_get('aweber_option_text', t('Sign up for our newsletter.'))),
           '#default_value' => variable_get('aweber_registration_default', 0),
         );
         return $form;
@@ -442,7 +442,7 @@ function aweber_user($op, &$edit, &$account, $category = NULL) {
         );
         $form['aweber']['aweber_signup'] = array(
           '#type' => 'checkbox',
-          '#title' => t(variable_get('aweber_option_text', 'Sign up for our newsletter.')),
+          '#title' => filter_xss_admin(variable_get('aweber_option_text', t('Sign up for our newsletter.'))),
           '#default_value' => !empty($account->aweber_signup) ? $account->aweber_signup : 0,
         );
         return $form;

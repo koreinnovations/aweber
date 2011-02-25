@@ -40,4 +40,3 @@ Development and maintenance sponsored by pingVision - http://pingv.com.
 
 AWeber.com and the AWeber service have their own license and Terms of Service.
 
-$Id$
